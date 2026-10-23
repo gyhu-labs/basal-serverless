@@ -1,0 +1,55 @@
+basal worker image — third-party notices
+========================================
+
+This image bundles and starts the basal inference engine and, when built with
+`FETCH_MODEL=1`, a basal-omni-1.0 model. Both are third-party work, and this
+file reproduces their attribution.
+
+basal (inference engine)
+------------------------
+
+  basal 2.3.1
+  Copyright 2026 Remigiusz Kinas
+  Licensed under the Apache License, Version 2.0 (see LICENSE in this
+  directory).
+  Source: https://github.com/rkinas/basal
+
+basal-omni-1.0 (model weights)
+------------------------------
+
+  basal-omni-1.0-mini / basal-omni-1.0-max
+  Copyright 2026 Remigiusz Kinas
+  Licensed under the Apache License, Version 2.0.
+  Model repositories: https://huggingface.co/Remek/basal-omni-1.0-mini,
+  https://huggingface.co/Remek/basal-omni-1.0-max
+
+  The weights are fine-tuned from Google Gemma 4 models, licensed under the
+  Apache License, Version 2.0:
+
+    basal-omni-1.0-mini  <-  google/gemma-4-E4B-it
+    basal-omni-1.0-max   <-  google/gemma-4-12B-it
+
+Upstream engine NOTICE (verbatim, from basal 2.3.1)
+---------------------------------------------------
+
+  basal
+  Copyright 2026 Remigiusz Kinas
+
+  This product includes models fine-tuned from the following works, licensed
+  under the Apache License, Version 2.0:
+
+    basal-omni-1.0-max   <- google/gemma-4-12B-it
+    basal-omni-1.0-mini  <- google/gemma-4-E4B-it
+
+  The inference engine in this repository is original work licensed under the
+  Apache License, Version 2.0. It includes contributions by Paweł Kiszczak,
+  Piotr Durlej, Kuba Sołtys, Michał Kardyś and @lukaspoloki.
+
+  basal-omni-1.0 models: released under the Apache License, Version 2.0.
+
+Platform SDKs
+-------------
+
+  RunPod Python SDK (`runpod`), MIT licensed, Copyright RunPod.
+  PyTorch, BSD-style licenses, Copyright Meta Platforms, Inc. and affiliates.
+  CUDA runtime libraries, under the NVIDIA Software License Agreement.

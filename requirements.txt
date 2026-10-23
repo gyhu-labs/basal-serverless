@@ -1,0 +1,19 @@
+# Constraints for the basal worker image, applied with `pip install -c`.
+#
+# These are *not* the requirements: the image's only requirement is the pinned
+# basal engine (a release tarball, see the Dockerfile). This file pins what the
+# engine must not move under itself — the torch build it was validated on, its
+# matching torchvision, and the RunPod SDK that owns the container's protocol.
+# A plain `pip install basal` would take the newest torch from PyPI, which may
+# be built for a newer CUDA than the GPU driver supports.
+#
+# Both wheels are preinstalled in `pytorch/pytorch:2.11.0-cuda12.8-cudnn9-runtime`
+# as `2.11.0+cu128` / `0.26.0+cu128`; `==2.11.0` matches a local version label,
+# so the constraints confirm the base image instead of reinstalling it.
+torch==2.11.0
+torchvision==0.26.0
+
+# The RunPod serverless SDK: `runpod.serverless.start` is the image's public
+# surface. Pinned because a protocol change there silently changes the worker's
+# input and output envelope.
+runpod==1.12.0

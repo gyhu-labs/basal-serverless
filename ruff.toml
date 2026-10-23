@@ -1,0 +1,9 @@
+# `basal-worker/` runs on the interpreter of its CUDA base image, which is
+# Python 3.12 — not the 3.14 the product runs on. The only difference that
+# matters here is syntax: with `target-version = "py314"` (the repository's
+# default) `ruff format` rewrites `except (A, B):` into PEP 758's
+# `except A, B:`, which is a SyntaxError on 3.12 — i.e. the image would build
+# green and die at import. The workflow runs the suite under `--python 3.12` for
+# the same reason.
+extend = "../pyproject.toml"
+target-version = "py312"

@@ -1,0 +1,21 @@
+# The build context is deliberately tiny: the image contains the handler, the
+# entrypoint, the healthcheck and a constraints file — nothing else. Excluding
+# everything first means a new file in this directory cannot leak into a
+# published image by accident; it has to be added here on purpose.
+*
+!Dockerfile
+!entrypoint.sh
+!handler.py
+!healthcheck.py
+!requirements.txt
+
+# Belt and braces: never ship a weight cache, a calibration file, a test or a
+# local venv even if a pattern above is edited into an include.
+**/__pycache__
+**/*.pyc
+**/.venv
+**/CALIBRATION*.json
+**/tests
+**/*.gguf
+**/*.safetensors
+**/*.bin
