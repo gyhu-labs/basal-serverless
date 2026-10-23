@@ -613,7 +613,7 @@ def build_context_files() -> list[Path]:
     `tests/` is excluded on purpose — its fixtures are loopback engines and
     fake payloads, and gitleaks (the CI job) scans the whole tree anyway.
     """
-    skipped = {"__pycache__", ".pytest_cache", ".venv", "tests"}
+    skipped = {".git", "__pycache__", ".pytest_cache", ".venv", "tests"}
     return [
         path
         for path in sorted(WORKER.rglob("*"))
