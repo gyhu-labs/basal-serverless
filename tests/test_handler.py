@@ -7,7 +7,7 @@ rather than in the product's ``tests/`` lane, which must not depend on a
 container.
 
 The fake engine answers the two paths the handler uses — ``GET /health`` and
-``POST /v1/systemone`` — with basal 2.3.1's shapes (``docs/API.md``).
+``POST /v1/systemone`` — with basal 2.3.x's shapes (``docs/API.md``).
 """
 
 from __future__ import annotations
@@ -120,7 +120,7 @@ def engine(monkeypatch: pytest.MonkeyPatch) -> Iterator[Callable[..., FakeEngine
 
 
 def healthy(path: str, body: Any) -> tuple[int, dict[str, Any]]:
-    """basal 2.3.1's happy path: health idle, one answer per question."""
+    """basal 2.3.x's happy path: health idle, one answer per question."""
     if path == "/health":
         return 200, {"status": "ok", "running": 0, "queued": 0}
     if path != "/v1/systemone":
@@ -346,7 +346,7 @@ def test_engine_death_is_detected_and_the_gate_is_repaid(
     assert after_death["answers"][0]["error"]["code"] == "engine_error"
 
     next_job = worker.handler({"input": {"requests": [one_question()]}})
-    assert next_job["error"]["code"] == "worker_unhealthy"
+    assert batch_error(next_job)["code"] == "worker_unhealthy"
 
 
 def test_batch_budget_reports_the_elements_it_could_not_send(
@@ -378,6 +378,28 @@ def test_a_generous_budget_does_not_shorten_a_request(
     assert "questions" in result
 
 
+def batch_error(result: dict) -> dict:
+    """The batch-level error as the caller reads it: a JSON string RunPod forwards."""
+    assert isinstance(result["error"], str), "a dict error is dropped by the RunPod SDK"
+    return json.loads(result["error"])
+
+
+def test_batch_error_survives_the_runpod_sdk(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Mirror runpod 1.12 rp_job.run_job: it pops `error` and `refresh_worker`.
+
+    The job must end with a string error (FAILED, message kept) and no empty output.
+    """
+    monkeypatch.setenv("BASAL_URL", "http://127.0.0.1:9")
+    monkeypatch.setenv("BASAL_HEALTH_TIMEOUT_S", "0.3")
+    monkeypatch.setenv("BASAL_HEALTH_POLL_S", "0.05")
+    job_output = worker.handler({"input": {"requests": [one_question()]}})
+    error_msg = job_output.pop("error", None)
+    refresh = job_output.pop("refresh_worker", None)
+    assert job_output == {}
+    assert isinstance(error_msg, str) and json.loads(error_msg)["code"] == "worker_unhealthy"
+    assert refresh is True
+
+
 def test_unreachable_engine_fails_the_batch(monkeypatch: pytest.MonkeyPatch) -> None:
     """A closed port is a batch-level error, not a crash and not a retry loop."""
     monkeypatch.setenv("BASAL_URL", "http://127.0.0.1:9")
@@ -386,7 +408,8 @@ def test_unreachable_engine_fails_the_batch(monkeypatch: pytest.MonkeyPatch) -> 
 
     result = worker.handler({"input": {"requests": [one_question()]}})
 
-    assert result["error"]["code"] == "worker_unhealthy"
+    assert batch_error(result)["code"] == "worker_unhealthy"
+    assert result["refresh_worker"] is True
 
 
 def test_unhealthy_engine_fails_fast(engine: Callable[..., FakeEngine]) -> None:
@@ -397,7 +420,7 @@ def test_unhealthy_engine_fails_fast(engine: Callable[..., FakeEngine]) -> None:
     result = worker.handler({"input": {"requests": [one_question(), one_question()]}})
     elapsed = time.monotonic() - started
 
-    assert result["error"]["code"] == "worker_unhealthy"
+    assert batch_error(result)["code"] == "worker_unhealthy"
     assert "answers" not in result  # no partial answer for the batch
     assert elapsed < 15  # the real budget is 180 s; the test budget is 1 s
     assert fake.posted_bodies() == []  # no request is sent to a dead engine
@@ -418,7 +441,7 @@ def test_invalid_batch(engine: Callable[..., FakeEngine]) -> None:
     fake = engine(healthy)
 
     for job in (None, {}, {"input": {}}, {"input": {"requests": []}}, {"input": {"requests": {}}}):
-        assert worker.handler(job)["error"]["code"] == "invalid_batch"
+        assert batch_error(worker.handler(job))["code"] == "invalid_batch"
     assert fake.calls == []
 
 
@@ -641,10 +664,10 @@ def test_build_context_has_no_secret_or_endpoint() -> None:
 
 
 def test_dockerfile_pins_the_engine_and_the_defaults() -> None:
-    """EARS 1: basal 2.3.1, text-only by default, media behind a flag."""
+    """EARS 1: basal 2.3.5, text-only by default, media behind a flag."""
     dockerfile = (WORKER / "Dockerfile").read_text(encoding="utf-8")
 
-    assert "ARG BASAL_VERSION=2.3.1" in dockerfile
+    assert "ARG BASAL_VERSION=2.3.5" in dockerfile
     assert "refs/tags/v${BASAL_VERSION}.tar.gz" in dockerfile
     assert "2.2.0" not in dockerfile
     assert "BASAL_MODE=fast-nocompile" in dockerfile
@@ -684,3 +707,19 @@ def test_worker_imports_only_the_stdlib() -> None:
                 continue
             offenders += [f"{name}: {module}" for module in modules if module not in allowed]
     assert offenders == []
+
+
+def test_boot_waits_for_the_engine_before_taking_jobs(engine: Callable[..., FakeEngine]) -> None:
+    """A healthy engine at boot: True, and the readiness is cached for the first job."""
+    fake = engine(healthy)
+    assert worker.boot(worker.Settings.from_env()) is True
+    worker.handler({"input": {"requests": [one_question()]}})
+    assert [path for path, _ in fake.calls].count("/health") == 1
+
+
+def test_boot_fails_when_the_engine_never_comes_up(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No engine inside the boot budget: False, so main() exits before any job."""
+    monkeypatch.setenv("BASAL_URL", "http://127.0.0.1:9")
+    monkeypatch.setenv("BASAL_BOOT_TIMEOUT_S", "0.3")
+    monkeypatch.setenv("BASAL_HEALTH_POLL_S", "0.05")
+    assert worker.boot(worker.Settings.from_env()) is False

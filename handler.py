@@ -27,9 +27,16 @@ Output, either the batch answered::
                                          "confidence": 0.93,
                                          "abstained": false}}}]}
 
-or, when the whole batch cannot be served::
+or, when the whole batch cannot be served, a RunPod-native failure::
 
-    {"error": {"code": "worker_unhealthy", "message": "..."}}
+    {"error": "{\"code\": \"worker_unhealthy\", \"message\": \"...\"}"}
+
+The RunPod SDK pops a top-level ``error`` out of the output and fails the job
+with it, so the batch-level error is a *string* (JSON with ``code`` and
+``message``): the caller sees ``status: FAILED`` and that string in ``error``.
+A dict there is dropped by the SDK and the job ends ``COMPLETED`` with no
+output at all. ``worker_unhealthy`` also asks RunPod to replace the worker
+(``refresh_worker``), so a broken engine is not kept warm and billed.
 
 ``answers[i]`` belongs to ``requests[i]``: order is preserved. An element that
 cannot be served gets ``{"error": {"code": ..., "message": ...}}`` in its own
@@ -40,6 +47,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import dataclasses
 import json
 import logging
 import os
@@ -115,7 +123,7 @@ def handler(job: Mapping[str, Any] | None) -> dict[str, Any]:
     requests = _requests_of(job)
     if requests is None:
         LOG.warning("batch rejected code=%s", CODE_INVALID_BATCH)
-        return _error(CODE_INVALID_BATCH, "input.requests must be a non-empty list")
+        return _batch_error(CODE_INVALID_BATCH, "input.requests must be a non-empty list")
 
     settings = Settings.from_env()
     try:
@@ -127,7 +135,7 @@ def handler(job: Mapping[str, Any] | None) -> dict[str, Any]:
             len(requests),
             _ms(started),
         )
-        return _error(CODE_WORKER_UNHEALTHY, str(exc))
+        return _batch_error(CODE_WORKER_UNHEALTHY, str(exc), refresh_worker=True)
 
     deadline = started + settings.batch_timeout_s
     answers = [_answer_one(settings, element, deadline) for element in requests]
@@ -453,6 +461,14 @@ def _error(code: str, message: str) -> dict[str, Any]:
     return {"error": {"code": code, "message": message}}
 
 
+def _batch_error(code: str, message: str, *, refresh_worker: bool = False) -> dict[str, Any]:
+    """A whole-batch failure in the shape the RunPod SDK forwards (see module doc)."""
+    result: dict[str, Any] = {"error": json.dumps({"code": code, "message": message})}
+    if refresh_worker:
+        result["refresh_worker"] = True
+    return result
+
+
 def _text(value: Any) -> str | None:
     return value if isinstance(value, str) and value else None
 
@@ -472,11 +488,33 @@ def _env_float(name: str, default: float) -> float:
     return value if value > 0 else default
 
 
+def boot(settings: Settings) -> bool:
+    """Wait for the engine *before* the worker takes any job.
+
+    A cold start downloads the weights, loads them and captures CUDA graphs,
+    which can take longer than one job's health gate. Waiting here keeps that
+    time out of the job (RunPod counts it as worker start-up), so no job is
+    consumed and failed by a worker that is still booting.
+    """
+    budget = _env_float("BASAL_BOOT_TIMEOUT_S", 600.0)
+    try:
+        _wait_until_ready(dataclasses.replace(settings, health_timeout_s=budget))
+    except Unhealthy as exc:
+        LOG.error("engine never became healthy at boot: %s", exc)
+        return False
+    return True
+
+
 def main() -> None:  # pragma: no cover - starts the RunPod SDK
     logging.basicConfig(
         level=os.environ.get("BASAL_LOG_LEVEL", "INFO"),
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
+    if not boot(Settings.from_env()):
+        # The container exits before it ever takes a job: RunPod sees a failed
+        # worker instead of a warm one that answers every job `worker_unhealthy`.
+        raise SystemExit(1)
+
     import runpod
 
     runpod.serverless.start({"handler": handler})

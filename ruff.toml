@@ -1,9 +1,8 @@
-# `basal-worker/` runs on the interpreter of its CUDA base image, which is
-# Python 3.12 — not the 3.14 the product runs on. The only difference that
-# matters here is syntax: with `target-version = "py314"` (the repository's
-# default) `ruff format` rewrites `except (A, B):` into PEP 758's
-# `except A, B:`, which is a SyntaxError on 3.12 — i.e. the image would build
-# green and die at import. The workflow runs the suite under `--python 3.12` for
-# the same reason.
-extend = "../pyproject.toml"
+# The worker runs on the interpreter of its CUDA base image (Python 3.12).
+# Keep target-version at py312: newer targets let `ruff format` rewrite
+# `except (A, B):` into PEP 758 syntax, a SyntaxError on 3.12.
 target-version = "py312"
+line-length = 100
+
+[lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]

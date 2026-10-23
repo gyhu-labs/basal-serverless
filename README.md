@@ -47,6 +47,7 @@ endpoint, not for a release.
 | `BASAL_CALIBRATION` | `/calibration/CALIBRATION.custom.json` | used **if the file is mounted**, with `--strict-calibration` |
 | `BASAL_EXTRA_ARGS` | *(empty)* | extra `basal-serve` flags, e.g. `--max-len 16384` |
 | `BASAL_URL` | `http://127.0.0.1:8001` | where the handler looks for the engine |
+| `BASAL_BOOT_TIMEOUT_S` | `600` | cold-start budget: the worker takes no job until the engine is healthy, and exits if it never is |
 | `BASAL_HEALTH_TIMEOUT_S` | `180` | boot gate; past it every batch answers `worker_unhealthy` |
 | `BASAL_REQUEST_TIMEOUT_S` | `300` | per-element engine timeout (RunPod's `executionTimeout` is 300 s) |
 | `BASAL_BATCH_TIMEOUT_S` | `290` | the whole job, 10 s short of `executionTimeout`: an element the budget cannot fit is reported, never attempted, so a slow one cannot get the job killed and lose the answers already computed |
@@ -136,11 +137,14 @@ Failure modes, per element or for the whole batch:
 | code | scope | meaning |
 |---|---|---|
 | `invalid_batch` | batch | `input.requests` is missing, empty or not a list |
-| `worker_unhealthy` | batch | the engine never answered `/health` with `status: ok` inside the boot budget |
+| `worker_unhealthy` | batch | the engine never answered `/health` with `status: ok` inside the boot budget; RunPod is also asked to replace the worker |
 | `invalid_request` | element | the element is malformed, or the engine refused it (422) |
 | `engine_oom` | element | the engine ran out of GPU memory (503) — a later retry may succeed |
 | `engine_error` | element | any other engine failure (500, no answer, unreachable) |
 
+A batch-level failure is a RunPod-native one: the job ends `FAILED` and its
+`error` is a JSON string `{"code": ..., "message": ...}` (the RunPod SDK pops a
+top-level `error` out of the output, and drops it if it is not a string).
 A failed element keeps its slot: `{"error": {"code": ..., "message": ...}}`.
 One malformed element never costs the rest of the batch, and the handler never
 retries — retries, fallbacks and budget rules belong to the calling gateway.

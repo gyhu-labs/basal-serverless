@@ -1,6 +1,6 @@
 """Docker ``HEALTHCHECK``: the engine answers ``/health`` with ``status: ok``.
 
-basal 2.3.1 reports ``{"status": "ok", "running": R, "queued": Q}``; the counts
+basal 2.3.x reports ``{"status": "ok", "running": R, "queued": Q}``; the counts
 are passed through in the message so `docker inspect` shows whether a probe
 landed while the engine was busy rather than idle. This is the container's own
 liveness signal — the batch gate the gateway sees is the handler's (180 s, then

@@ -8,7 +8,7 @@ file reproduces their attribution.
 basal (inference engine)
 ------------------------
 
-  basal 2.3.1
+  basal 2.3.5
   Copyright 2026 Remigiusz Kinas
   Licensed under the Apache License, Version 2.0 (see LICENSE in this
   directory).
@@ -29,7 +29,7 @@ basal-omni-1.0 (model weights)
     basal-omni-1.0-mini  <-  google/gemma-4-E4B-it
     basal-omni-1.0-max   <-  google/gemma-4-12B-it
 
-Upstream engine NOTICE (verbatim, from basal 2.3.1)
+Upstream engine NOTICE (verbatim, from basal 2.3.5)
 ---------------------------------------------------
 
   basal

@@ -38,10 +38,12 @@ ARG PYTORCH_IMAGE=pytorch/pytorch:2.11.0-cuda12.8-cudnn9-runtime
 
 FROM ${PYTORCH_IMAGE} AS image
 
-# basal 2.3.1 is the pinned engine (delta 2026-10-22 D8: an engine-only release;
-# the weights did not change). The version is a build arg so the pin is visible
+# basal 2.3.5 is the pinned engine. 2.3.4 captures basal-omni's CUDA graphs
+# largest first (basal-omni-1.0-mini 27.8 -> 18.9 GB on one H100); with 2.3.1 the
+# mini model does not start on a 24 GB card, so the worker never got healthy.
+# The weights did not change. The version is a build arg so the pin is visible
 # and testable, but no caller is expected to move it.
-ARG BASAL_VERSION=2.3.1
+ARG BASAL_VERSION=2.3.5
 ARG RUNPOD_VERSION=1.12.0
 ARG FETCH_MODEL=0
 ARG BASAL_MODEL=Remek/basal-omni-1.0-mini
@@ -133,7 +135,7 @@ WORKDIR /app
 #   8001  basal-serve, loopback only, the handler's only client
 EXPOSE 8000
 
-# `running`/`queued` come from basal 2.3.1's /health. `start-period` covers a
+# `running`/`queued` come from basal's /health (2.3.1+). `start-period` covers a
 # cold model load; the handler's own gate is the 180 s one the gateway sees.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=300s --retries=3 \
     CMD ["python", "/app/healthcheck.py"]
